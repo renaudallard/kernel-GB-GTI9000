@@ -25,6 +25,7 @@
 #include <mach/map.h>
 
 #include <plat/regs-serial.h>
+#include <mach/regs-power.h>
 #include <mach/regs-clock.h>
 #include <mach/regs-irq.h>
 #include <asm/irq.h>
@@ -416,7 +417,7 @@ static int s3c_pm_enter(suspend_state_t state)
 #ifndef USE_DMA_ALLOC
 	static unsigned long regs_save[16];
 #endif /* !USE_DMA_ALLOC */
-	unsigned int tmp;
+	unsigned int tmp,audiodomain_On;
 
 	/* ensure the debug is initialised (if enabled) */
 
@@ -490,12 +491,12 @@ static int s3c_pm_enter(suspend_state_t state)
 	s3c_pm_set_eint(29, 0x4);   // ok key
    	if(get_headset_status() & SEC_HEADSET_4_POLE_DEVICE)
 	{
-	    s3c_pm_set_eint(30, 0x4); //sendend
+		s3c_pm_set_eint(30, 0x4); //sendend
 	}
-    else
-    {
-        s3c_pm_clear_eint(30);
-    }
+	else
+	{
+		s3c_pm_clear_eint(30);
+	}
 
 	//s3c_pm_arch_prepare_irqs();
 	
@@ -520,7 +521,7 @@ static int s3c_pm_enter(suspend_state_t state)
 	//s3c_config_sleep_gpio();
 
 	// Enable PS_HOLD pin to avoid reset failure */
-        __raw_writel((0x5 << 12 | 0x1<<9 | 0x1<<8 | 0x1<<0),S5P_PSHOLD_CONTROL);
+	__raw_writel((0x5 << 12 | 0x1<<9 | 0x1<<8 | 0x1<<0),S5P_PSHOLD_CONTROL);
 
 
 	/* send the cpu to sleep... */
@@ -563,10 +564,25 @@ static int s3c_pm_enter(suspend_state_t state)
 	s3c_pm_restore_uarts();
 	s3c_pm_restore_gpios();
 
+	tmp = readl(S5P_NORMAL_CFG);
+	if(!(tmp & S5PC110_POWER_DOMAIN_AUDIO)) {
+		tmp = tmp | S5PC110_POWER_DOMAIN_AUDIO;
+		writel(tmp , S5P_NORMAL_CFG);
+		audiodomain_On = 1;
+	} else {
+		audiodomain_On = 0;
+	}
+
 	/* enable gpio, uart, mmc */
 	tmp = __raw_readl(S5P_OTHERS);
 	tmp |= (1<<31) | (1<<30) | (1<<28) | (1<<29);
 	__raw_writel(tmp, S5P_OTHERS);
+
+	tmp = readl(S5P_NORMAL_CFG);
+	if (audiodomain_On) {
+		tmp = tmp & ~S5PC110_POWER_DOMAIN_AUDIO;
+		writel(tmp , S5P_NORMAL_CFG);
+	}
 
 	/*clear for next wakeup*/
 	tmp = __raw_readl(S5P_WAKEUP_STAT);
