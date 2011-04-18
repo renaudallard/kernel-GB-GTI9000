@@ -1,4 +1,4 @@
-HOW TO BUILD KERNEL 2.6.32 FOR GT-I9000
+HOW TO BUILD KERNEL 2.6.35 FOR GT-I9000
 
 1. Visit http://www.codesourcery.com/, download and install Sourcery G++ Lite 2009q3-68 toolchain for ARM EABI.
 
@@ -10,12 +10,9 @@ HOW TO BUILD KERNEL 2.6.32 FOR GT-I9000
 
 5. If the kernel is built successfully, you will find following files from the top directory:
 	arch/arm/boot/zImage
-	net/netfilter/xt_TCPMSS.ko
-	drivers/onedram_svn/modemctl/modemctl.ko
-	drivers/onedram_svn/onedram/onedram.ko
-	drivers/onedram_svn/svnet/svnet.ko
-	drivers/bluetooth/bthid/bthid.ko
-	drivers/net/wireless/bcm4329/dhd.ko
+	crypto/ansi_cprng.ko
 	drivers/scsi/scsi_wait_scan.ko
-	drivers/samsung/fm_si4709/Si4709_driver.ko
-	drivers/samsung/vibetonz/vibrator.ko
+	drivers/net/wireless/bcm4329/dhd.ko
+	drivers/misc/vibetonz/vibrator.ko
+	drivers/misc/fm_si4709/Si4709_driver.ko
+	drivers/bluetooth/bthid/bthid.ko

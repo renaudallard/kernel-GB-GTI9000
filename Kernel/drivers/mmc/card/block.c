@@ -23,6 +23,7 @@
 
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/hdreg.h>
 #include <linux/kdev_t.h>
@@ -85,11 +86,7 @@ static void mmc_blk_put(struct mmc_blk_data *md)
 	mutex_lock(&open_lock);
 	md->usage--;
 	if (md->usage == 0) {
-		int devmaj = MAJOR(disk_devt(md->disk));
-		int devidx = MINOR(disk_devt(md->disk)) >> MMC_SHIFT;
-
-		if (!devmaj)
-			devidx = md->disk->first_minor >> MMC_SHIFT;
+		int devidx = md->disk->first_minor >> MMC_SHIFT;
 
 		blk_cleanup_queue(md->queue.queue);
 
@@ -370,21 +367,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		mmc_wait_for_req(card->host, &brq.mrq);
 
 		mmc_queue_bounce_post(mq);
-#if defined(CONFIG_ARIES_NTT) // Modify NTTS1
-#ifdef	MMC_SECTOR_DEBUG_JAPAN_SYSTEM
-		if(!strcmp(md->disk->disk_name, "mmcblk0")) // mmcblk0 : movinand , mmcblk1 : sdcard
-		{
-			printk(" ==================================== \n ");
-			printk("%s  ,  %s ", md->disk->disk_name, __func__);
-			if(rq_data_dir(req) == READ)
-				printk(" :: READ  \n ");
-			else
-				printk(" :: \t WRITE \n ");
-			printk( "\t pos_sec [ %x ], nr_sector [ %x ] \n",
-					(unsigned int)blk_rq_pos(req), (unsigned int)blk_rq_sectors(req));
-		}
-#endif
-#endif
+
 		/*
 		 * Check for errors here, but don't jump to cmd_err
 		 * until later as we need to wait for the card to leave
@@ -393,7 +376,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		if (brq.cmd.error || brq.data.error || brq.stop.error) {
 			if (brq.data.blocks > 1 && rq_data_dir(req) == READ) {
 				/* Redo read one sector at a time */
-				printk(KERN_DEBUG "%s: retrying using single "
+				printk(KERN_WARNING "%s: retrying using single "
 				       "block read\n", req->rq_disk->disk_name);
 				if(brq.data.error == -EILSEQ) {
 					mq->rx_retries++;
@@ -592,6 +575,7 @@ static struct mmc_blk_data *mmc_blk_alloc(struct mmc_card *card)
 	md->disk->private_data = md;
 	md->disk->queue = md->queue.queue;
 	md->disk->driverfs_dev = &card->dev;
+	md->disk->flags = GENHD_FL_EXT_DEVT;
 
 	/*
 	 * As discussed on lkml, GENHD_FL_REMOVABLE should:

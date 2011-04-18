@@ -1,7 +1,7 @@
 /* linux/drivers/media/video/samsung/csis.c
  *
  * Copyright (c) 2010 Samsung Electronics Co,. Ltd.
- * 		http://www.samsung.com/
+ *		http://www.samsung.com/
  *
  * MIPI-CSI2 Support file for FIMC driver
  *
@@ -18,14 +18,15 @@
 #include <linux/irq.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/consumer.h>
 #include <linux/videodev2.h>
+#include <linux/slab.h>
 
 #include <linux/io.h>
 #include <linux/memory.h>
 #include <plat/clock.h>
 #include <plat/regs-csis.h>
 #include <plat/csis.h>
-#include <mach/pd.h>
 #include "csis.h"
 
 static struct s3c_csis_info *s3c_csis;
@@ -209,7 +210,8 @@ static void s3c_csis_set_hs_settle(int settle)
 }
 #endif
 
-void s3c_csis_start(int lanes, int settle, int align, int width, int height, int pixel_format)
+void s3c_csis_start(int lanes, int settle, int align, int width,
+		int height, int pixel_format)
 {
 	struct s3c_platform_csis *pdata;
 
@@ -225,7 +227,7 @@ void s3c_csis_start(int lanes, int settle, int align, int width, int height, int
 	s3c_csis_set_hs_settle(settle);	/* s5k6aa */
 	s3c_csis_set_data_align(align);
 	s3c_csis_set_wclk(0);
-	if (pixel_format == V4L2_PIX_FMT_JPEG) 
+	if (pixel_format == V4L2_PIX_FMT_JPEG)
 		s3c_csis_set_format(MIPI_USER_DEF_PACKET_1);
 	else
 		s3c_csis_set_format(MIPI_CSI_YCBCR422_8BIT);
@@ -268,14 +270,6 @@ static int s3c_csis_clk_on(struct platform_device *pdev)
 {
 	struct s3c_platform_csis *pdata;
 	struct clk *parent, *mout_csis;
-	int ret;
-
-	/* power domain enable for mipi-csis */
-	ret = s5pv210_pd_enable("csis_pd");
-	if (ret < 0) {
-		err("failed to enable csis power domain\n");
-		return -EINVAL;
-	}
 
 	pdata = to_csis_plat(&pdev->dev);
 
@@ -299,6 +293,8 @@ static int s3c_csis_clk_on(struct platform_device *pdev)
 	clk_set_parent(mout_csis, parent);
 	clk_set_parent(s3c_csis->clock, mout_csis);
 
+	/* Turn on csis power domain regulator */
+	regulator_enable(s3c_csis->regulator);
 	/* clock enable for csis */
 	clk_enable(s3c_csis->clock);
 
@@ -308,7 +304,6 @@ static int s3c_csis_clk_on(struct platform_device *pdev)
 static int s3c_csis_clk_off(struct platform_device *pdev)
 {
 	struct s3c_platform_csis *plat;
-	int ret;
 
 	plat = to_csis_plat(&pdev->dev);
 
@@ -321,13 +316,8 @@ static int s3c_csis_clk_off(struct platform_device *pdev)
 
 	/* clock disable for csis */
 	clk_disable(s3c_csis->clock);
-
-	/* power domain disable for mipi-csis */
-	ret = s5pv210_pd_disable("csis_pd");
-	if (ret < 0) {
-		err("failed to enable csis power domain\n");
-		return -EINVAL;
-	}
+	/* Turn off csis power domain regulator */
+	regulator_disable(s3c_csis->regulator);
 
 	return 0;
 }
@@ -345,6 +335,13 @@ static int s3c_csis_probe(struct platform_device *pdev)
 	if (pdata->cfg_gpio)
 		pdata->cfg_gpio();
 
+	/* Get csis power domain regulator */
+	s3c_csis->regulator = regulator_get(&pdev->dev, "pd");
+	if (IS_ERR(s3c_csis->regulator)) {
+		err("%s: failed to get resource %s\n",
+				__func__, "s3c-csis");
+		return PTR_ERR(s3c_csis->regulator);
+	}
 	/* clock & power on */
 	s3c_csis_clk_on(pdev);
 

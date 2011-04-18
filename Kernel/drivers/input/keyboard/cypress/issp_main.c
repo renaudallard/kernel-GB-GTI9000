@@ -372,6 +372,7 @@
 #include <linux/delay.h>
 #include <linux/input.h>
 #include <mach/regs-gpio.h>
+#include <mach/gpio-aries.h>
 #include <plat/gpio-cfg.h>
 #include <asm/gpio.h>
 #include <asm/uaccess.h>

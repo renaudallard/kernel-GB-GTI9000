@@ -223,11 +223,11 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 	if (!bcm_static_skb)
 	{
 		int i;
-#ifndef CUSTOMER_HW_SAMSUNG
+#ifndef SAMSUNG_STATIC_BUF
 		void *skb_buff_ptr = 0;
 #endif
 		bcm_static_skb = (bcm_static_pkt_t *)((char *)bcm_static_buf + 2048);
-#ifdef CUSTOMER_HW_SAMSUNG
+#ifdef SAMSUNG_STATIC_BUF
 		for (i = 0; i < MAX_STATIC_PKT_NUM; i++) {
 			bcm_static_skb->skb_4k[i] = dev_alloc_skb(DHD_SKB_1PAGE_BUFSIZE);
 			if (bcm_static_skb->skb_4k[i] == NULL) {
@@ -252,8 +252,8 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 #else
 		skb_buff_ptr = dhd_os_prealloc(4, 0);
 
-		bcopy(skb_buff_ptr, bcm_static_skb, sizeof(struct sk_buff *)*16);
-#endif /* CUSTOMER_HW_SAMSUNG */
+		bcopy(skb_buff_ptr, bcm_static_skb, sizeof(struct sk_buff *)*(MAX_STATIC_PKT_NUM*2+1));
+#endif /* SAMSUNG_STATIC_BUF */
 		for (i = 0; i < MAX_STATIC_PKT_NUM*2+1; i++)
 			bcm_static_skb->pkt_use[i] = 0;
 
@@ -261,10 +261,15 @@ osl_attach(void *pdev, uint bustype, bool pkttag)
 	}
 #endif 
 	return osh;
+
+#ifdef SAMSUNG_STATIC_BUF
+
 err:
 
 	kfree(osh);
 	return 0;
+
+#endif
 }
 
 void
@@ -277,13 +282,17 @@ osl_detach(osl_t *osh)
 	if (bcm_static_buf) {
 		bcm_static_buf = 0;
 	}
+
 	if (bcm_static_skb) {
+#ifdef SAMSUNG_STATIC_BUF
 		int i;
 		down(&bcm_static_skb->osl_pkt_sem);
 		for(i=0; i<MAX_STATIC_PKT_NUM*2+1; i++) {
 			dev_kfree_skb(bcm_static_skb->skb_4k[i]);
 		}
 		up(&bcm_static_skb->osl_pkt_sem);
+#endif
+
 		bcm_static_skb = 0;
 	}
 #endif 
@@ -307,6 +316,9 @@ osl_pktget(osl_t *osh, uint len)
 
 	return ((void*) skb);
 }
+
+#ifdef DHD_USE_STATIC_BUF
+#ifdef SAMSUNG_STATIC_BUF
 void*
 osl_pktget_kernel(osl_t *osh, uint len)
 {
@@ -322,7 +334,8 @@ osl_pktget_kernel(osl_t *osh, uint len)
 
 	return ((void*) skb);
 }
-
+#endif /* SAMSUNG_STATIC_BUF */
+#endif
 
 void
 osl_pktfree(osl_t *osh, void *p, bool send)
@@ -365,7 +378,11 @@ osl_pktget_static(osl_t *osh, uint len)
 	if (len > DHD_SKB_4PAGE_BUFSIZE)
 	{
 		OSL_MSG_ERROR(("osl_pktget_static: Do we really need this big skb?? len=%d\n", len));
+#ifdef SAMSUNG_STATIC_BUF
 		return osl_pktget_kernel(osh, len);
+#else
+		return osl_pktget(osh, len);
+#endif
 	}
 
 	
@@ -392,14 +409,13 @@ osl_pktget_static(osl_t *osh, uint len)
 		}
 	}
 
-	if (len <= DHD_SKB_2PAGE_BUFSIZE) 
-	{
+	if (len <= DHD_SKB_2PAGE_BUFSIZE) {
 		for (i = 0; i < MAX_STATIC_PKT_NUM; i++)
 		{
 			if (bcm_static_skb->pkt_use[i+MAX_STATIC_PKT_NUM] == 0)
 				break;
 		}
-
+	
 		if (i != MAX_STATIC_PKT_NUM)
 		{
 			bcm_static_skb->pkt_use[i+MAX_STATIC_PKT_NUM] = 1;

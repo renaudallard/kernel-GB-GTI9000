@@ -48,6 +48,7 @@
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <mach/regs-gpio.h>
+#include <mach/gpio-aries.h>
 #include <plat/gpio-cfg.h>
 #include <asm/gpio.h>
 #include <linux/miscdevice.h>
