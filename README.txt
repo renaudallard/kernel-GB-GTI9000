@@ -16,3 +16,23 @@ HOW TO BUILD KERNEL 2.6.35 FOR GT-I9000
 	drivers/misc/vibetonz/vibrator.ko
 	drivers/misc/fm_si4709/Si4709_driver.ko
 	drivers/bluetooth/bthid/bthid.ko
+
+Supercurio's note:
+
+How to match the correct local version in order to load prebuilt modules:
+-------------------------------------------------------------------------
+In your build script, set:
+
+For JVB:
+export LOCALVERSION="-I9000XWJVB-CL118186"
+
+You'll need to match the LOCALVERSION to the one required by binary
+kernel modules coming with the associated initramfs.
+
+
+How to insert your name in the kernel version displayed:
+--------------------------------------------------------
+
+You can do like that:
+export KBUILD_BUILD_VERSION="Foo_version.x"
+
