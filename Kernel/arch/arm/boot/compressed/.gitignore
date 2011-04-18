@@ -1,6 +1,6 @@
 font.c
 piggy.gz
-piggy.*
+piggy.gzip
 vmlinux.lds
 vmlinux
 lib1funcs.S
