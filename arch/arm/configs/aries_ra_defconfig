@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.35.7
-# Tue Apr 19 17:23:24 2011
+# Wed Apr 20 07:53:38 2011
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -1767,9 +1767,7 @@ CONFIG_LINUSTOREIII_TINY_DEBUG_VERBOSE=0
 #
 # File systems
 #
-CONFIG_EXT2_FS=y
-# CONFIG_EXT2_FS_XATTR is not set
-# CONFIG_EXT2_FS_XIP is not set
+# CONFIG_EXT2_FS is not set
 # CONFIG_EXT3_FS is not set
 CONFIG_EXT4_FS=y
 CONFIG_EXT4_USE_FOR_EXT23=y
