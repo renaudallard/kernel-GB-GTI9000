@@ -114,13 +114,15 @@ static ssize_t name##_store(struct device *dev, struct device_attribute *attr, \
 void update_hpvol()
 {
 	unsigned short val;
+	DECLARE_WM8994(codec);
+
+	// don't affect headphone amplifier volume
+	// when not on heapdhones or if call is active
+	if (!is_path(HEADPHONES)
+	    || (wm8994->codec_state & CALL_ACTIVE))
+	    return;
 
 	bypass_write_hook = true;
-	// hard limit to 62 because 63 introduces distortions
-	if (hplvol > 62)
-		hplvol = 62;
-	if (hprvol > 62)
-		hprvol = 62;
 
 	// we don't need the Volume Update flag when sending the first volume
 	val = (WM8994_HPOUT1L_MUTE_N | hplvol);
@@ -330,7 +332,7 @@ bool is_path(int unified_path)
 			|| wm8994->cur_path == RING_SPK
 			|| wm8994->fmradio_path == FMR_SPK
 			|| wm8994->fmradio_path == FMR_SPK_MIX);
-#else
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
 		return (wm8994->cur_path == SPK
 			|| wm8994->cur_path == SPK_HP);
@@ -338,28 +340,31 @@ bool is_path(int unified_path)
 		return (wm8994->cur_path == SPK
 			|| wm8994->cur_path == RING_SPK);
 #endif
-#endif
 
 		// headphones
 		// FIXME: be sure dac_direct doesn't break phone calls on TAB
 		// with these spath detection settings (HP4P)
 	case HEADPHONES:
+
 #ifdef NEXUS_S
 		return (wm8994->cur_path == HP
 			|| wm8994->cur_path == HP_NO_MIC);
-#else
+#endif
 #ifdef GALAXY_TAB
 		return (wm8994->cur_path == HP3P
 			|| wm8994->cur_path == HP4P
 			|| wm8994->fmradio_path == FMR_HP);
-#else
+#endif
 #ifdef M110S
 		return (wm8994->cur_path == HP);
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+		return (wm8994->cur_path == HP
+			|| wm8994->cur_path == HP_NO_MIC
+			|| wm8994->fmradio_path == FMR_HP);
 #else
 		return (wm8994->cur_path == HP
 			|| wm8994->fmradio_path == FMR_HP);
-#endif
-#endif
 #endif
 
 		// FM Radio on headphones
@@ -583,6 +588,12 @@ static ssize_t headphone_amplifier_level_store(struct device *dev,
 	if (sscanf(buf, "%hu", &vol) == 1) {
 		// left and right are set to the same volumes
 		hplvol = hprvol = vol;
+		// hard limit to 62 because 63 introduces distortions
+		if (hplvol > 62)
+			hplvol = 62;
+		if (hprvol > 62)
+			hprvol = 62;
+
 		update_hpvol();
 	}
 	return size;
@@ -1055,14 +1066,27 @@ unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 	}
 #ifdef CONFIG_SND_VOODOO_DEBUG_LOG
 	// log every write to dmesg
-	printk("Voodoo sound: wm8994_write register= [%X] value= [%X]\n",
-	       reg, value);
 #ifdef NEXUS_S
 	printk("Voodoo sound: codec_state=%u, stream_state=%u, "
 	       "cur_path=%i, rec_path=%i, "
 	       "power_state=%i\n",
 	       wm8994->codec_state, wm8994->stream_state,
-	       wm8994->cur_path, wm8994->rec_path, wm8994->power_state);
+	       wm8994->cur_path, wm8994->rec_path,
+	       wm8994->power_state);
+#else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	printk("Voodoo sound: wm8994_write 0x%03X 0x%04X "
+	       "codec_state=%u, stream_state=%u, "
+	       "cur_path=%i, rec_path=%i, "
+	       "fmradio_path=%i, fmr_mix_path=%i, "
+	       "input_source=%i, output_source=%i, "
+	       "power_state=%i\n",
+	       reg, value,
+	       wm8994->codec_state, wm8994->stream_state,
+	       wm8994->fmradio_path, wm8994->fmr_mix_path,
+	       wm8994->cur_path, wm8994->rec_path,
+	       wm8994->input_source, wm8994->output_source,
+	       wm8994->power_state);
 #else
 	printk("Voodoo sound: codec_state=%u, stream_state=%u, "
 	       "cur_path=%i, rec_path=%i, "
@@ -1074,6 +1098,7 @@ unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 	       wm8994->fmradio_path, wm8994->fmr_mix_path,
 	       wm8994->power_state,
 	       wm8994->recognition_active, wm8994->ringtone_active);
+#endif
 #endif
 #endif
 	return value;
