@@ -1186,6 +1186,13 @@ static void touch_keypad_gpio_init(void)
 		printk(KERN_ERR "Failed to request gpio touch_en.\n");
 }
 
+static void touch_keypad_gpio_sleep(int onoff) {
+	if (onoff == TOUCHKEY_ON)
+		s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT1);
+	else
+		s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT0);
+}
+
 static void touch_keypad_onoff(int onoff)
 {
 	gpio_direction_output(_3_GPIO_TOUCH_EN, onoff);
@@ -1211,6 +1218,7 @@ static struct touchkey_platform_data touchkey_data = {
 	.keycode_cnt = ARRAY_SIZE(touch_keypad_code),
 	.keycode = touch_keypad_code,
 	.touchkey_onoff = touch_keypad_onoff,
+	.touchkey_sleep_onoff = touch_keypad_gpio_sleep,
 };
 
 static struct gpio_event_direct_entry aries_keypad_key_map[] = {
