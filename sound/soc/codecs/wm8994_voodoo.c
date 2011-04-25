@@ -31,7 +31,7 @@
 #endif
 
 #define SUBJECT "wm8994_voodoo.c"
-#define VOODOO_SOUND_VERSION 7
+#define VOODOO_SOUND_VERSION 8
 
 #ifdef MODULE
 #include "tegrak_voodoo_sound.h"
@@ -332,13 +332,14 @@ bool is_path(int unified_path)
 			|| wm8994->cur_path == RING_SPK
 			|| wm8994->fmradio_path == FMR_SPK
 			|| wm8994->fmradio_path == FMR_SPK_MIX);
-#endif
+#else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
 		return (wm8994->cur_path == SPK
 			|| wm8994->cur_path == SPK_HP);
 #else
 		return (wm8994->cur_path == SPK
 			|| wm8994->cur_path == RING_SPK);
+#endif
 #endif
 
 		// headphones
@@ -349,15 +350,15 @@ bool is_path(int unified_path)
 #ifdef NEXUS_S
 		return (wm8994->cur_path == HP
 			|| wm8994->cur_path == HP_NO_MIC);
-#endif
+#else
 #ifdef GALAXY_TAB
 		return (wm8994->cur_path == HP3P
 			|| wm8994->cur_path == HP4P
 			|| wm8994->fmradio_path == FMR_HP);
-#endif
+#else
 #ifdef M110S
 		return (wm8994->cur_path == HP);
-#endif
+#else
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
 		return (wm8994->cur_path == HP
 			|| wm8994->cur_path == HP_NO_MIC
@@ -365,6 +366,9 @@ bool is_path(int unified_path)
 #else
 		return (wm8994->cur_path == HP
 			|| wm8994->fmradio_path == FMR_HP);
+#endif
+#endif
+#endif
 #endif
 
 		// FM Radio on headphones
@@ -404,7 +408,6 @@ void update_speaker_tuning(bool with_mute)
 	if (!(is_path(SPEAKER) || (wm8994->codec_state & CALL_ACTIVE)))
 		return;
 
-	printk("We are on speaker!\n");
 	if (speaker_tuning) {
 		// DRC settings
 		wm8994_write(codec, WM8994_AIF1_DRC1_3, 0x0010);
@@ -503,15 +506,18 @@ void update_fll_tuning(bool with_mute)
 	bypass_write_hook = false;
 }
 
-unsigned short mono_downmix_get_value(unsigned short val)
+unsigned short mono_downmix_get_value(unsigned short val, bool can_reverse)
 {
-	// depends on the output path in order to preserve mono downmixing
-	// on speaker
-	if (!is_path(SPEAKER)) {
-		if (mono_downmix)
+	DECLARE_WM8994(codec);
+
+	// Takes care not switching to Stereo on speaker or during a call
+	if (!is_path(SPEAKER) && !(wm8994->codec_state & CALL_ACTIVE)) {
+		if (mono_downmix) {
 			val |= WM8994_AIF1DAC1_MONO;
-		else
-			val &= ~WM8994_AIF1DAC1_MONO;
+		} else {
+			if (can_reverse)
+				val &= ~WM8994_AIF1DAC1_MONO;
+		}
 	}
 
 	return val;
@@ -521,11 +527,14 @@ void update_mono_downmix(bool with_mute)
 {
 	unsigned short val1, val2, val3;
 	val1 = mono_downmix_get_value(wm8994_read
-				      (codec, WM8994_AIF1_DAC1_FILTERS_1));
+				      (codec, WM8994_AIF1_DAC1_FILTERS_1),
+				      true);
 	val2 = mono_downmix_get_value(wm8994_read
-				      (codec, WM8994_AIF1_DAC2_FILTERS_1));
+				      (codec, WM8994_AIF1_DAC2_FILTERS_1),
+				      true);
 	val3 = mono_downmix_get_value(wm8994_read
-				      (codec, WM8994_AIF2_DAC_FILTERS_1));
+				      (codec, WM8994_AIF2_DAC_FILTERS_1),
+				      true);
 
 	bypass_write_hook = true;
 	wm8994_write(codec, WM8994_AIF1_DAC1_FILTERS_1, val1);
@@ -534,19 +543,22 @@ void update_mono_downmix(bool with_mute)
 	bypass_write_hook = false;
 }
 
-unsigned short dac_direct_get_value(unsigned short val)
+unsigned short dac_direct_get_value(unsigned short val, bool can_reverse)
 {
 	DECLARE_WM8994(codec);
 
-	if (is_path(HEADPHONES)
-	    && (wm8994->codec_state & PLAYBACK_ACTIVE)
-	    && !(wm8994->codec_state & CALL_ACTIVE)
-	    && !(wm8994->stream_state & PCM_STREAM_PLAYBACK)) {
+	if ((is_path(HEADPHONES)
+	     && (wm8994->codec_state & PLAYBACK_ACTIVE)
+	     && (wm8994->stream_state & PCM_STREAM_PLAYBACK)
+	     && !(wm8994->codec_state & CALL_ACTIVE))
+	     || is_path(RADIO_HEADPHONES)) {
 
 		if (dac_direct) {
 			if (val == WM8994_DAC1L_TO_MIXOUTL)
 				return WM8994_DAC1L_TO_HPOUT1L;
-			else if (val == WM8994_DAC1L_TO_HPOUT1L)
+		} else {
+			if (val == WM8994_DAC1L_TO_HPOUT1L
+			    && can_reverse)
 				return WM8994_DAC1L_TO_MIXOUTL;
 		}
 	}
@@ -557,8 +569,10 @@ unsigned short dac_direct_get_value(unsigned short val)
 void update_dac_direct(bool with_mute)
 {
 	unsigned short val1, val2;
-	val1 = dac_direct_get_value(wm8994_read(codec, WM8994_OUTPUT_MIXER_1));
-	val2 = dac_direct_get_value(wm8994_read(codec, WM8994_OUTPUT_MIXER_2));
+	val1 = dac_direct_get_value(wm8994_read(codec,
+						WM8994_OUTPUT_MIXER_1), true);
+	val2 = dac_direct_get_value(wm8994_read(codec,
+						WM8994_OUTPUT_MIXER_2), true);
 
 	bypass_write_hook = true;
 	wm8994_write(codec, WM8994_OUTPUT_MIXER_1, val1);
@@ -994,18 +1008,18 @@ void voodoo_hook_record_main_mic()
 }
 #endif
 
+#ifdef NEXUS_S
 void voodoo_hook_playback_speaker()
 {
 	// global kill switch
 	if (!enable)
 		return;
-#ifdef NEXUS_S
 	if (!speaker_tuning)
 		return;
 
 	update_speaker_tuning(false);
-#endif
 }
+#endif
 
 unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 				      unsigned int reg, unsigned int value)
@@ -1041,6 +1055,15 @@ unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 #endif
 
 #ifdef CONFIG_SND_VOODOO_FM
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+		// FM tuning virtual hook for Gingerbread
+		if (is_path(RADIO_HEADPHONES)) {
+			if (reg == WM8994_AIF2_DRC_1
+			    || reg == WM8994_AIF2_DAC_FILTERS_1)
+				voodoo_hook_fmradio_headset();
+		}
+#else
+		// FM tuning virtual hook for Froyo
 		if (is_path(RADIO_HEADPHONES)) {
 			if (reg == WM8994_INPUT_MIXER_2
 			    || reg == WM8994_AIF2_DRC_1
@@ -1048,21 +1071,26 @@ unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 				voodoo_hook_fmradio_headset();
 		}
 #endif
-
+#endif
+		// global Oversampling tuning
 		if (reg == WM8994_OVERSAMPLING)
 			value = osr128_get_value(value);
 
+		// global Anti-Jitter tuning
 		if (reg == WM8994_FLL1_CONTROL_4)
 			value = fll_tuning_get_value(value);
 
+		// global Mono downmix tuning
 		if (reg == WM8994_AIF1_DAC1_FILTERS_1
 		    || reg == WM8994_AIF1_DAC2_FILTERS_1
 		    || reg == WM8994_AIF2_DAC_FILTERS_1)
-			value = mono_downmix_get_value(value);
+			value = mono_downmix_get_value(value, false);
 
+		// DAC direct tuning virtual hook
 		if (reg == WM8994_OUTPUT_MIXER_1
 		    || reg == WM8994_OUTPUT_MIXER_2)
-			value = dac_direct_get_value(value);
+			value = dac_direct_get_value(value, false);
+
 	}
 #ifdef CONFIG_SND_VOODOO_DEBUG_LOG
 	// log every write to dmesg
@@ -1088,14 +1116,26 @@ unsigned int voodoo_hook_wm8994_write(struct snd_soc_codec *codec_,
 	       wm8994->input_source, wm8994->output_source,
 	       wm8994->power_state);
 #else
-	printk("Voodoo sound: codec_state=%u, stream_state=%u, "
+	printk("Voodoo sound: wm8994_write 0x%03X 0x%04X "
+	       "codec_state=%u, stream_state=%u, "
 	       "cur_path=%i, rec_path=%i, "
 	       "fmradio_path=%i, fmr_mix_path=%i, "
+#ifdef CONFIG_S5PC110_KEPLER_BOARD
+	       "call_record_path=%i, call_record_ch=%i, "
+	       "AUDIENCE_state=%i, "
+	       "Fac_SUB_MIC_state=%i, TTY_state=%i, "
+#endif
 	       "power_state=%i, "
 	       "recognition_active=%i, ringtone_active=%i\n",
+	       reg, value,
 	       wm8994->codec_state, wm8994->stream_state,
 	       wm8994->cur_path, wm8994->rec_path,
 	       wm8994->fmradio_path, wm8994->fmr_mix_path,
+#ifdef CONFIG_S5PC110_KEPLER_BOARD
+	       wm8994->call_record_path, wm8994->call_record_ch,
+	       wm8994->AUDIENCE_state,
+	       wm8994->Fac_SUB_MIC_state, wm8994->TTY_state,
+#endif
 	       wm8994->power_state,
 	       wm8994->recognition_active, wm8994->ringtone_active);
 #endif
