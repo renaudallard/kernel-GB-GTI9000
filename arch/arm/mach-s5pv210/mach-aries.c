@@ -1186,6 +1186,13 @@ static void touch_keypad_gpio_init(void)
 		printk(KERN_ERR "Failed to request gpio touch_en.\n");
 }
 
+static void touch_keypad_gpio_sleep(int onoff) {
+	if (onoff == TOUCHKEY_ON)
+		s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT1);
+	else
+		s3c_gpio_slp_cfgpin(_3_GPIO_TOUCH_EN, S3C_GPIO_SLP_OUT0);
+}
+
 static void touch_keypad_onoff(int onoff)
 {
 	gpio_direction_output(_3_GPIO_TOUCH_EN, onoff);
@@ -1211,6 +1218,7 @@ static struct touchkey_platform_data touchkey_data = {
 	.keycode_cnt = ARRAY_SIZE(touch_keypad_code),
 	.keycode = touch_keypad_code,
 	.touchkey_onoff = touch_keypad_onoff,
+	.touchkey_sleep_onoff = touch_keypad_gpio_sleep,
 };
 
 static struct gpio_event_direct_entry aries_keypad_key_map[] = {
@@ -2225,7 +2233,7 @@ static void mxt224_power_off(void)
 	gpio_direction_output(GPIO_TOUCH_EN, 0);
 }
 
-#define MXT224_MAX_MT_FINGERS 5
+#define MXT224_MAX_MT_FINGERS 10
 
 static u8 t7_config[] = {GEN_POWERCONFIG_T7,
 				64, 255, 50};
@@ -2233,8 +2241,8 @@ static u8 t8_config[] = {GEN_ACQUISITIONCONFIG_T8,
 				7, 0, 5, 0, 0, 0, 9, 35};
 static u8 t9_config[] = {TOUCH_MULTITOUCHSCREEN_T9,
 				139, 0, 0, 19, 11, 0, 32, 25, 2, 1, 25, 3, 1,
-				46, MXT224_MAX_MT_FINGERS, 5, 14, 10, 255, 3,
-				255, 3, 18, 18, 10, 10, 141, 65, 143, 110, 18};
+				46, MXT224_MAX_MT_FINGERS, 5, 14, 10, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18};
 static u8 t18_config[] = {SPT_COMCONFIG_T18,
 				0, 1};
 static u8 t20_config[] = {PROCI_GRIPFACESUPPRESSION_T20,
