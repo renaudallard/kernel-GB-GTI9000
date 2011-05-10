@@ -33,8 +33,8 @@
 #define SLEEPMSEC		0x1000
 #define ENDDEF			0x2000
 #define DEFMASK		0xFF00
-#define DIM_BL	20
-#define MIN_BL	30
+#define DIM_BL	0
+#define MIN_BL	0
 #define MAX_BL	255
 #define MAX_GAMMA_VALUE	24
 
@@ -213,9 +213,9 @@ static void update_brightness(struct s5p_lcd *lcd)
 #ifdef CONFIG_FB_S3C_TL2796_ACL
 	update_acl(lcd);
 #endif
-	if (lcd->on_19gamma)
+/*	if (lcd->on_19gamma)
 		s6e63m0_panel_send_sequence(lcd, pdata->gamma19_table[gamma_value]);
-	else
+	else*/
 		s6e63m0_panel_send_sequence(lcd, pdata->gamma22_table[gamma_value]);
 
 	s6e63m0_panel_send_sequence(lcd, pdata->gamma_update);
