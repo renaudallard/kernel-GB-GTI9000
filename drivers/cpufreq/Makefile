@@ -1,4 +1,3 @@
-KBUILD_EXTRA_SYMBOLS=/home/jeff/GT-I9000_OpenSource_GB/GT-I9000_Kernel/Kernel/drivers/cpufreq/Module.symvers 
 # CPUfreq core
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o
 # CPUfreq stats
