@@ -189,6 +189,11 @@ int wm8994_write(struct snd_soc_codec *codec, unsigned int reg,
 	value = voodoo_hook_wm8994_write(codec, reg, value);
 #endif
 
+#if defined(CONFIG_ARIES_NTT)
+       //ssong100903. WM8994 Applications Issue Report CE000681 Changing digital path or clock enable bits when active may result in no sound output
+       if(reg == 0x5) value |= 0x3303;
+#endif
+
 	data[0] = (reg & 0xff00) >> 8;
 	data[1] = reg & 0x00ff;
 	data[2] = value >> 8;
@@ -401,7 +406,9 @@ static int wm8994_set_path(struct snd_kcontrol *kcontrol,
 	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
 	struct wm8994_priv *wm8994 = codec->drvdata;
 	struct soc_enum *mc = (struct soc_enum *)kcontrol->private_value;
+#ifndef CONFIG_ARIES_NTT /* ssong110401. compile warning removed */
 	int val;
+#endif
 	int path_num = ucontrol->value.integer.value[0];
 
 	if (strcmp(mc->texts[path_num], playback_path[path_num])) {
@@ -643,10 +650,22 @@ static int wm8994_set_voice_path(struct snd_kcontrol *kcontrol,
 	}
 
 	if (wm8994->cur_path != path_num ||
-			!(wm8994->codec_state & CALL_ACTIVE)) {
+			!(wm8994->codec_state & CALL_ACTIVE)
+#ifdef CONFIG_ARIES_NTT /* ssong110320. BT voicecall - second incoming call mute error. */
+			||(path_num == BT) ||(path_num == SPK)
+#endif
+	) {
 		wm8994->codec_state |= CALL_ACTIVE;
 		wm8994->cur_path = path_num;
+#ifdef CONFIG_ARIES_NTT /* ssong110401. Inserted 3-pole earjack makes pop noise and mute error when a voice call */
+		if(path_num == HP_NO_MIC)
+			wm8994->universal_voicecall_path[RCV] (codec);
+		else
+			wm8994->universal_voicecall_path[wm8994->cur_path] (codec);
+#else
 		wm8994->universal_voicecall_path[wm8994->cur_path] (codec);
+#endif
+
 	} else {
 		int val;
 		val = wm8994_read(codec, WM8994_AIF1_DAC1_FILTERS_1);
@@ -1237,6 +1256,7 @@ static int wm8994_hw_params(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+#ifndef CONFIG_ARIES_NTT /* ssong110401. compile warning removed */
 static int wm8994_digital_mute(struct snd_soc_dai *codec_dai, int mute)
 {
 	struct snd_soc_codec *codec = codec_dai->codec;
@@ -1263,6 +1283,7 @@ static int wm8994_digital_mute(struct snd_soc_dai *codec_dai, int mute)
 
 	return 0;
 }
+#endif
 
 static int wm8994_startup(struct snd_pcm_substream *substream,
 			  struct snd_soc_dai *codec_dai)
@@ -1287,6 +1308,18 @@ static int wm8994_startup(struct snd_pcm_substream *substream,
 		msleep(50);
 		wm8994_write(codec, WM8994_POWER_MANAGEMENT_1,
 				WM8994_VMID_SEL_NORMAL | WM8994_BIAS_ENA);
+
+#if defined(CONFIG_ARIES_NTT)
+		//ssong100903. WM8994 Applications Issue Report CE000681 Changing digital path or clock enable bits when active may result in no sound output 
+		wm8994_write(codec, 0X05, 0X3303); // AIF1DAC1L/R_ENA, DAC1L/R_ENA
+
+		//ssong100903. Wolfson Clock MUX S/W Selection Patch
+		/*
+		wm8994_write(codec, 0X102, 0X0003);
+		wm8994_write(codec, 0X817, 0X0000);
+		wm8994_write(codec, 0X102, 0X0000);
+		*/
+#endif
 		wm8994_write(codec, WM8994_OVERSAMPLING, 0x0000);
 	} else
 		DEBUG_LOG("Already turned on codec!!");

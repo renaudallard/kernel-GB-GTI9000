@@ -2308,11 +2308,20 @@ static struct i2c_board_info i2c_devs8[] __initdata = {
 static int fsa9480_init_flag = 0;
 static bool mtp_off_status;
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+extern u16 askonstatus;
+void fsa9480_usb_cb(bool attached)
+#else
 static void fsa9480_usb_cb(bool attached)
+#endif
 {
 	struct usb_gadget *gadget = platform_get_drvdata(&s3c_device_usbgadget);
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	if ((gadget) && (askonstatus != 0xabcd)) {
+#else
 	if (gadget) {
+#endif
 		if (attached)
 			usb_gadget_vbus_connect(gadget);
 		else
@@ -2442,7 +2451,11 @@ static void max17040_power_supply_unregister(struct power_supply *psy)
 static struct max17040_platform_data max17040_pdata = {
 	.power_supply_register = max17040_power_supply_register,
 	.power_supply_unregister = max17040_power_supply_unregister,
+#if defined(CONFIG_ARIES_NTT)
+	.rcomp_value = 0xC000,
+#else
 	.rcomp_value = 0xB000,
+#endif
 };
 
 static struct i2c_board_info i2c_devs9[] __initdata = {
